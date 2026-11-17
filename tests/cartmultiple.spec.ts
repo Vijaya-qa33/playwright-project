@@ -54,4 +54,4 @@ test('Verify adding three products and removing one from cart', async ({ page })
     // Verify only two products remain
     await expect(cartItems).toHaveCount(2);
 
-});
+})
