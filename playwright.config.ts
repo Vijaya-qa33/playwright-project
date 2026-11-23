@@ -15,8 +15,11 @@ export default defineConfig({
   // Run one test at a time
   workers: 1,
 
-  // HTML report
-  reporter: 'html',
+  // HTML and Allure reports
+  reporter: [
+    ['html'],
+    ['allure-playwright']
+  ],
 
   // Common browser settings
   use: {
