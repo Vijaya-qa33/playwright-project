@@ -51,7 +51,8 @@ export default defineConfig({
       name: 'Google Chrome',
       testIgnore: [
         /auth\.setup\.spec\.ts/,
-        /Wishlist\.spec\.ts/
+        /Wishlist\.spec\.ts/,
+        /Address\.spec\.ts/
       ],
       use: desktopChrome
     },
@@ -63,6 +64,14 @@ export default defineConfig({
         ...desktopChrome,
         storageState: authFile
       },
+    },
+    {
+      name: 'Address Chrome',
+      testMatch: /Address\.spec\.ts/,
+      use: {
+        ...desktopChrome,
+        storageState: authFile
+      }
     },
   ],
 
