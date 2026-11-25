@@ -17,7 +17,6 @@ export class CartPage {
         );
 
         this.cartCount = page.locator('#nav-cart-count');
-
         this.activeCart = page.locator('#sc-active-cart');
 
         this.cartItems = page.locator(
@@ -32,23 +31,22 @@ export class CartPage {
     // Get cart count
     async getCartCount(): Promise<number> {
         const text = await this.cartCount.textContent().catch(() => '');
-
         return Number((text || '').trim()) || 0;
     }
 
     // Add first non-sponsored search result to cart
     async addProductToCart() {
-        const productCard = this.productCards
+        const eligibleProducts = this.productCards
             .filter({
                 has: this.page.locator('a[href*="/dp/"]')
             })
             .filter({
                 hasNotText: 'Sponsored'
-            })
-            .first();
+            });
+        const productCard = eligibleProducts.first();
 
         const productLink = productCard.locator(
-            'a[href*="/dp/"]'
+            'a[href*="/dp/"]:visible'
         ).first();
 
         await productLink.waitFor({
@@ -59,9 +57,13 @@ export class CartPage {
         const href = await productLink.getAttribute('href');
 
         if (!href) {
-            throw new Error(
-                'Product URL was not found in search results'
-            );
+            throw new Error('Product URL was not found in search results');
+        }
+
+        const asin = href.match(/\/dp\/([A-Z0-9]{10})(?:[/?#]|$)/i)?.[1];
+
+        if (!asin) {
+            throw new Error(`Product URL does not contain a valid ASIN: ${href}`);
         }
 
         const productUrl = new URL(
@@ -77,8 +79,8 @@ export class CartPage {
 
         // Locate Add to Cart button
         const addButton = this.page.locator(
-            '#add-to-cart-button'
-        ).last();
+            '#add-to-cart-button:visible'
+        ).first();
 
         await addButton.waitFor({
             state: 'visible',
@@ -87,43 +89,41 @@ export class CartPage {
 
         await expect(addButton).toBeEnabled();
 
+        const previousCartCount = await this.getCartCount();
+
         // Click Add to Cart
         await addButton.click();
 
-        // Verify Amazon confirmation
+        // Verify Amazon confirmation message
         const addedMessage = this.page.getByText(
             'Added to cart',
             { exact: true }
-        ).first();
+        ).filter({
+            visible: true
+        }).first();
 
         await expect(addedMessage).toBeVisible({
             timeout: 30000
         });
 
-        // Click Cart button in Amazon confirmation panel
-        const goToCartButton = this.page.locator(
-            '#sw-gtc, #attach-sidesheet-view-cart-button'
-        ).first();
+        await this.openCart();
 
-        await goToCartButton.waitFor({
-            state: 'visible',
-            timeout: 20000
-        });
-
-        await goToCartButton.click();
-
-        // Wait for cart page
-        await this.page.locator(
-            '#sc-active-cart, #sc-empty-cart'
-        ).first().waitFor({
-            state: 'visible',
-            timeout: 30000
-        });
-
-        // Verify at least one cart item
+        // Verify product is actually added
         await expect(this.cartItems.first()).toBeVisible({
             timeout: 20000
         });
+
+        await expect(
+            this.page.locator(
+                `#sc-active-cart .sc-list-item[data-asin="${asin}"]`
+            )
+        ).toBeVisible({
+            timeout: 20000
+        });
+
+        await expect(this.cartCount).toHaveText(
+            String(previousCartCount + 1)
+        );
     }
 
     // Open cart page
@@ -182,6 +182,10 @@ export class CartPage {
 
     // Change quantity
     async setQuantity(item: Locator, quantity: number) {
+        if (!Number.isInteger(quantity) || quantity < 1) {
+            throw new Error('Quantity must be a positive integer');
+        }
+
         const dropdown = item.locator(
             'select[name="quantity"]'
         );
@@ -222,7 +226,47 @@ export class CartPage {
                     (await quantityLocator.textContent())?.trim() || 1
                 );
             }
+
+            await expect(quantityLocator).toHaveText(String(quantity));
         }
+    }
+
+    // Increase quantity
+    async increaseQuantity(item: Locator) {
+        const quantityLocator = this.getQuantity(item);
+
+        const current = Number(
+            (await quantityLocator.textContent())?.trim() || 1
+        );
+
+        await item.locator(
+            'button[data-action="a-stepper-increment"]'
+        ).click();
+
+        await expect(quantityLocator).toHaveText(
+            String(current + 1)
+        );
+    }
+
+    // Decrease quantity
+    async decreaseQuantity(item: Locator) {
+        const quantityLocator = this.getQuantity(item);
+
+        const current = Number(
+            (await quantityLocator.textContent())?.trim() || 1
+        );
+
+        if (current <= 1) {
+            throw new Error('Quantity cannot be decreased below 1');
+        }
+
+        await item.locator(
+            'button[data-action="a-stepper-decrement"]'
+        ).click();
+
+        await expect(quantityLocator).toHaveText(
+            String(current - 1)
+        );
     }
 
     // Remove product
@@ -243,6 +287,37 @@ export class CartPage {
         ).toBeVisible({
             timeout: 20000
         });
+    }
+
+    // Verify product in cart
+    async verifyProductInCart(productName: string) {
+        await expect(
+            this.getCartItem(productName).first()
+        ).toBeVisible({
+            timeout: 20000
+        });
+    }
+
+    // Verify cart count
+    async verifyCartCount(expectedCount: number) {
+        await expect(this.cartCount).toHaveText(
+            String(expectedCount)
+        );
+    }
+
+    // Verify product price
+    async verifyProductPrice(item: Locator) {
+        await expect(this.getItemPrice(item)).toBeVisible();
+    }
+
+    // Verify subtotal
+    async verifySubtotal() {
+        await expect(this.getSubtotal()).toBeVisible();
+    }
+
+    // Verify multiple products
+    async verifyMultipleProducts(expectedCount: number) {
+        await expect(this.cartItems).toHaveCount(expectedCount);
     }
 
     // Read price

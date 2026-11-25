@@ -1,5 +1,17 @@
 
 import { defineConfig, devices } from '@playwright/test';
+import path from 'node:path';
+
+const authFile = path.resolve(
+  process.cwd(),
+  'playwright',
+  '.auth',
+  'amazon.json'
+);
+const desktopChrome = {
+  ...devices['Desktop Chrome'],
+  channel: 'chrome' as const
+};
 
 export default defineConfig({
 
@@ -29,13 +41,27 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
 
-  // Use actual Google Chrome
   projects: [
     {
+      name: 'auth-setup',
+      testMatch: /auth\.setup\.spec\.ts/,
+      use: desktopChrome
+    },
+    {
       name: 'Google Chrome',
+      testIgnore: [
+        /auth\.setup\.spec\.ts/,
+        /Wishlist\.spec\.ts/
+      ],
+      use: desktopChrome
+    },
+    {
+      name: 'Wishlist Chrome',
+      testMatch: /Wishlist\.spec\.ts/,
+      dependencies: ['auth-setup'],
       use: {
-        ...devices['Desktop Chrome'],
-        channel: 'chrome',
+        ...desktopChrome,
+        storageState: authFile
       },
     },
   ],
